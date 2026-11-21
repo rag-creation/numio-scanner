@@ -344,7 +344,18 @@ fun EditorScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             if (idCard && draft.size == 2) {
-                Text("Front and back go on one page", color = p.barInk, fontSize = 13.sp)
+                // Photos are labelled in the order taken; swap if the back was shot first.
+                Box(
+                    Modifier.height(46.dp).clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, Color(0xFF4A463F), RoundedCornerShape(12.dp))
+                        .clickable(enabled = !saving, role = Role.Button, onClickLabel = "Swap front and back") {
+                            val first = draft[0]
+                            draft[0] = draft[1]
+                            draft[1] = first
+                        }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("⇅  Swap sides", color = p.barInk, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
             } else {
                 Box(
                     Modifier.height(46.dp).clip(RoundedCornerShape(12.dp))
