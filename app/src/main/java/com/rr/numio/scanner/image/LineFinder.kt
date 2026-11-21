@@ -128,7 +128,16 @@ internal object LineFinder {
                 val score = avg * avg * sqrt(area)
                 if (score > bestScore) {
                     bestScore = score
-                    best = quad.map { Offset((it.x / (w - 1)).coerceIn(0f, 1f), (it.y / (h - 1)).coerceIn(0f, 1f)) }
+                    // Step each corner ~1.5 px (at this size) towards the middle so the
+                    // table's edge line doesn't end up on the scanned page.
+                    best = quad.map {
+                        val dx = cx - it.x
+                        val dy = cy - it.y
+                        val len = max(1f, hypot(dx, dy))
+                        val x = it.x + dx / len * 1.5f
+                        val y = it.y + dy / len * 1.5f
+                        Offset((x / (w - 1)).coerceIn(0f, 1f), (y / (h - 1)).coerceIn(0f, 1f))
+                    }
                 }
             }
         return best
