@@ -16,7 +16,7 @@ import kotlin.math.roundToInt
  *    and not glued to the photo's edge = probably the page.
  * 4. The best blob's outermost points become the four corners.
  *
- * If nothing looks like a page, it falls back to a small margin and the user drags the corners.
+ * If nothing looks like a page, it keeps almost the whole photo and the user drags the corners.
  */
 object EdgeFinder {
 
@@ -55,7 +55,8 @@ object EdgeFinder {
             val c = bestBlob(eroded, w, h) ?: continue
             if (best == null || c.score > best.score) best = c
         }
-        return best?.corners ?: inset(0.04f)
+        // Not sure? Keep (almost) the whole photo rather than guess a wrong crop.
+        return best?.corners ?: inset(0.02f)
     }
 
     private fun otsu(lum: IntArray): Int {
@@ -128,7 +129,7 @@ object EdgeFinder {
             }
 
             val frac = count / total
-            if (frac < 0.08f || frac > 0.95f) continue
+            if (frac < 0.05f || frac > 0.95f) continue
 
             // Undo the 2-pixel erosion by pushing corners outwards a little.
             val cx = (tl % w + tr % w + br % w + bl % w) / 4f
@@ -150,9 +151,11 @@ object EdgeFinder {
             // A real page fills its own four corners almost completely.
             val fill = (count / quadArea).coerceAtMost(1f)
             if (fill < 0.6f) continue
+            // A page in a scan has background around it. Anything running off the
+            // photo's edge is the table, a wall or a reflection, never the page.
             val edgeShare = edgeTouches.toFloat() / max(1, count)
-            val edgePenalty = if (edgeShare > 0.04f) 0.35f else 1f
-            val score = frac * fill * fill * edgePenalty
+            if (edgeShare > 0.02f) continue
+            val score = frac * fill * fill
             if (best == null || score > best.score) best = Candidate(corners, score)
         }
         return best
