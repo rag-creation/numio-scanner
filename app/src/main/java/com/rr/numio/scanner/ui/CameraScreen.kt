@@ -25,6 +25,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -219,7 +220,7 @@ fun CameraScreen(
         if (mode == CamMode.IdCard && granted) {
             // Card-shaped guide (ID-1 cards are 85.6 × 54 mm).
             Column(
-                Modifier.align(Alignment.Center).offset(y = (-60).dp),
+                Modifier.align(Alignment.Center).offset(y = (-60).dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
@@ -234,9 +235,12 @@ fun CameraScreen(
                     )
                 }
                 Spacer(Modifier.height(14.dp))
+                // Nearly full width, so the card fills the photo: sharper small text.
                 Box(
                     Modifier
-                        .size(width = 320.dp, height = 202.dp)
+                        .padding(horizontal = 14.dp)
+                        .fillMaxWidth()
+                        .aspectRatio(85.6f / 54f)
                         .border(3.dp, NumioAmber, RoundedCornerShape(16.dp)),
                 )
             }
