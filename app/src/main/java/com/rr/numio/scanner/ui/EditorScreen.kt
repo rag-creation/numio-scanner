@@ -234,13 +234,31 @@ fun EditorScreen(
                         base?.let { b -> scope.launch { page.corners = withContext(Dispatchers.Default) { EdgeFinder.find(b) } } }
                     }
                     ToolButton(Glyph.Expand, "Whole photo") { page.corners = ImageTools.FULL }
-                    ToolButton(Glyph.Rotate, "Rotate") { page.rotation = (page.rotation + 90) % 360 }
                 }
                 EditTab.Filters -> Column {
                     Row(
                         Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        // Rotate lives here, next to the finished page, so you see it turn.
+                        Row(
+                            Modifier
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(p.card)
+                                .border(1.dp, p.line, RoundedCornerShape(10.dp))
+                                .clickable(role = Role.Button, onClickLabel = "Rotate page") {
+                                    page.rotation = (page.rotation + 90) % 360
+                                }
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            LineIcon(Glyph.Rotate, p.accentInk, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Rotate", color = p.ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                        Box(Modifier.width(1.dp).height(24.dp).background(p.line))
                         Look.entries.forEach { l -> Chip(l.label, l == page.look, { page.look = l; page.autoLook = false }) }
                     }
                     if (draft.size > 1) {
