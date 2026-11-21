@@ -255,7 +255,7 @@ private val dateFormat = SimpleDateFormat("d MMM · HH:mm", Locale.getDefault())
 @Composable
 private fun ScanCard(scan: Scan, onClick: () -> Unit) {
     val p = LocalPaper.current
-    val thumb by produceState<Bitmap?>(null, scan.id) {
+    val thumb by produceState<Bitmap?>(null, scan.id, scan.rev) {
         value = withContext(Dispatchers.IO) { runCatching { ImageTools.decodeFile(scan.page(0), 500) }.getOrNull() }
     }
     Column(Modifier.clickable(role = Role.Button, onClick = onClick)) {
