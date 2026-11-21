@@ -52,6 +52,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalView
+import android.view.HapticFeedbackConstants
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -144,9 +151,24 @@ fun CameraScreen(
         camera?.cameraControl?.enableTorch(torch)
     }
 
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    val flash = remember { Animatable(0f) }
+    var lastShot by remember { mutableStateOf(0L) }
+
     fun capture() {
         if (busy) return
+        // Ignore a second tap right after a photo, so one tap = one page.
+        val now = System.currentTimeMillis()
+        if (now - lastShot < 1200) return
+        lastShot = now
         busy = true
+        // Feedback: a short tap vibration and a white flash.
+        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        scope.launch {
+            flash.snapTo(0.85f)
+            flash.animateTo(0f, tween(260))
+        }
         val dir = File(ctx.cacheDir, "draft").apply { mkdirs() }
         val file = File(dir, "page_${System.currentTimeMillis()}.jpg")
         imageCapture.takePicture(
@@ -322,6 +344,11 @@ fun CameraScreen(
                     )
                 }
             }
+        }
+
+        // Shutter flash
+        if (flash.value > 0f) {
+            Box(Modifier.fillMaxSize().alpha(flash.value).background(Color.White))
         }
 
         qrText?.let { text ->
