@@ -123,7 +123,7 @@ fun EditorScreen(
 
     val base by produceState<Bitmap?>(null, page) {
         value = null
-        val bmp = withContext(Dispatchers.Default) { runCatching { ImageTools.decodeFile(page.file, 1200) }.getOrNull() }
+        val bmp = withContext(Dispatchers.Default) { runCatching { ImageTools.decodeFile(page.file, 2000) }.getOrNull() }
         if (bmp != null) {
             // Look for a page first: a dim photo of paper is still paper.
             // Only when no page is found and the picture is dark (a screenshot or
@@ -346,8 +346,11 @@ fun EditorScreen(
                             runCatching {
                                 store.save(finalName, pages.size) { i ->
                                     val s = pages[i]
-                                    val src = ImageTools.decodeFile(s.file, 2200)
-                                    ImageTools.process(src, s.corners ?: EdgeFinder.find(src), s.rotation, s.look, s.adjust)
+                                    // Full-size photo, so the cut-out page keeps all its detail.
+                                    val src = ImageTools.decodeFile(s.file, 4096)
+                                    val out = ImageTools.process(src, s.corners ?: EdgeFinder.find(src), s.rotation, s.look, s.adjust)
+                                    if (out !== src) src.recycle()
+                                    out
                                 }
                             }
                         }

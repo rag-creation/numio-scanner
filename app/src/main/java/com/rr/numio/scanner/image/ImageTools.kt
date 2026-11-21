@@ -91,7 +91,7 @@ object ImageTools {
         fun d(a: Offset, b: Offset) = hypot(a.x - b.x, a.y - b.y)
         var w = max(d(tl, tr), d(bl, br))
         var h = max(d(tl, bl), d(tr, br))
-        val cap = 3000f
+        val cap = 3508f // A4 at 300 dpi
         if (max(w, h) > cap) {
             val s = cap / max(w, h); w *= s; h *= s
         }

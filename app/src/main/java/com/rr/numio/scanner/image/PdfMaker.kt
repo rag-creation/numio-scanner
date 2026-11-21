@@ -14,8 +14,8 @@ object PdfMaker {
         val doc = PdfDocument()
         try {
             for (i in 0 until scan.pageCount) {
-                // ~200 dpi at A4 width: sharp text, sensible file size.
-                val bmp = ImageTools.decodeFile(scan.page(i), 1700)
+                // ~250 dpi at A4 width: sharp text and drawings, sensible file size.
+                val bmp = ImageTools.decodeFile(scan.page(i), 2480)
                 val pw = 595
                 val ph = (pw.toFloat() * bmp.height / bmp.width).roundToInt().coerceAtLeast(1)
                 val info = PdfDocument.PageInfo.Builder(pw, ph, i + 1).create()
