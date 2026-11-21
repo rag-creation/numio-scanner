@@ -29,7 +29,10 @@ object EdgeFinder {
     fun find(src: Bitmap): List<Offset> = findOrNull(src) ?: inset(0.02f)
 
     /** The page's corners, or null when nothing in the photo looks like a page. */
-    fun findOrNull(src: Bitmap): List<Offset>? {
+    fun findOrNull(src: Bitmap): List<Offset>? = LineFinder.find(src) ?: findByBrightness(src)
+
+    /** Backup method: the biggest light, page-shaped blob. */
+    private fun findByBrightness(src: Bitmap): List<Offset>? {
         val scale = SIZE.toFloat() / max(src.width, src.height)
         val w = max(16, (src.width * scale).roundToInt())
         val h = max(16, (src.height * scale).roundToInt())
