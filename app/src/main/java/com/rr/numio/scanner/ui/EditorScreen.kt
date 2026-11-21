@@ -125,14 +125,19 @@ fun EditorScreen(
         value = null
         val bmp = withContext(Dispatchers.Default) { runCatching { ImageTools.decodeFile(page.file, 1200) }.getOrNull() }
         if (bmp != null) {
-            // Screenshots and dark pages: keep the whole picture and leave it untouched.
-            val dark = withContext(Dispatchers.Default) { ImageTools.isDark(bmp) }
-            if (page.corners == null) {
-                page.corners = if (dark) ImageTools.FULL else withContext(Dispatchers.Default) { EdgeFinder.find(bmp) }
-            }
-            if (page.autoLook) {
-                page.autoLook = false
-                if (dark) page.look = Look.Original
+            // Look for a page first: a dim photo of paper is still paper.
+            // Only when no page is found and the picture is dark (a screenshot or
+            // dark-mode app) do we keep the whole picture and leave it untouched.
+            if (page.corners == null || page.autoLook) {
+                val found = withContext(Dispatchers.Default) { EdgeFinder.findOrNull(bmp) }
+                val darkNoPage = found == null && withContext(Dispatchers.Default) { ImageTools.isDark(bmp) }
+                if (page.corners == null) {
+                    page.corners = found ?: if (darkNoPage) ImageTools.FULL else EdgeFinder.inset(0.02f)
+                }
+                if (page.autoLook) {
+                    page.autoLook = false
+                    if (darkNoPage) page.look = Look.Original
+                }
             }
         }
         value = bmp

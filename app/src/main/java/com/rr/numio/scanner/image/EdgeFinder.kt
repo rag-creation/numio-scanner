@@ -26,7 +26,10 @@ object EdgeFinder {
 
     private class Candidate(val corners: List<Offset>, val score: Float)
 
-    fun find(src: Bitmap): List<Offset> {
+    fun find(src: Bitmap): List<Offset> = findOrNull(src) ?: inset(0.02f)
+
+    /** The page's corners, or null when nothing in the photo looks like a page. */
+    fun findOrNull(src: Bitmap): List<Offset>? {
         val scale = SIZE.toFloat() / max(src.width, src.height)
         val w = max(16, (src.width * scale).roundToInt())
         val h = max(16, (src.height * scale).roundToInt())
@@ -55,8 +58,7 @@ object EdgeFinder {
             val c = bestBlob(eroded, w, h) ?: continue
             if (best == null || c.score > best.score) best = c
         }
-        // Not sure? Keep (almost) the whole photo rather than guess a wrong crop.
-        return best?.corners ?: inset(0.02f)
+        return best?.corners
     }
 
     private fun otsu(lum: IntArray): Int {
