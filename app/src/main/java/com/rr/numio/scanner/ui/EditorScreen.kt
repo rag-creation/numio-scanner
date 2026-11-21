@@ -90,6 +90,8 @@ import kotlin.math.roundToInt
 class PageDraft(val file: File) {
     var corners by mutableStateOf<List<Offset>?>(null)
     var look by mutableStateOf(Look.CleanPaper)
+    /** True until the user picks a filter, so we can choose a better starting one. */
+    var autoLook = true
     var adjust by mutableStateOf(Adjust())
     var rotation by mutableIntStateOf(0)
 }
@@ -122,8 +124,16 @@ fun EditorScreen(
     val base by produceState<Bitmap?>(null, page) {
         value = null
         val bmp = withContext(Dispatchers.Default) { runCatching { ImageTools.decodeFile(page.file, 1200) }.getOrNull() }
-        if (bmp != null && page.corners == null) {
-            page.corners = withContext(Dispatchers.Default) { EdgeFinder.find(bmp) }
+        if (bmp != null) {
+            // Screenshots and dark pages: keep the whole picture and leave it untouched.
+            val dark = withContext(Dispatchers.Default) { ImageTools.isDark(bmp) }
+            if (page.corners == null) {
+                page.corners = if (dark) ImageTools.FULL else withContext(Dispatchers.Default) { EdgeFinder.find(bmp) }
+            }
+            if (page.autoLook) {
+                page.autoLook = false
+                if (dark) page.look = Look.Original
+            }
         }
         value = bmp
     }
@@ -226,7 +236,7 @@ fun EditorScreen(
                         Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Look.entries.forEach { l -> Chip(l.label, l == page.look, { page.look = l }) }
+                        Look.entries.forEach { l -> Chip(l.label, l == page.look, { page.look = l; page.autoLook = false }) }
                     }
                     if (draft.size > 1) {
                         Text(
@@ -234,7 +244,7 @@ fun EditorScreen(
                             color = p.accentInk, fontSize = 13.sp, fontWeight = FontWeight.Medium,
                             modifier = Modifier
                                 .padding(start = 20.dp, top = 10.dp)
-                                .clickable(role = Role.Button) { draft.forEach { it.look = page.look; it.adjust = page.adjust } }
+                                .clickable(role = Role.Button) { draft.forEach { it.look = page.look; it.adjust = page.adjust; it.autoLook = false } }
                                 .padding(vertical = 6.dp),
                         )
                     }

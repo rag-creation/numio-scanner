@@ -115,7 +115,9 @@ object ImageTools {
         val h = src.height
         val px = IntArray(w * h)
         src.getPixels(px, 0, w, 0, 0, w, h)
-        val bg = if (look.paper) backgroundMap(src) else null
+        // Shadow removal only makes sense on light paper. On dark pages (screenshots,
+        // dark-mode apps) it would blow dark areas out to white.
+        val bg = if (look.paper && !isDark(src)) backgroundMap(src) else null
 
         for (i in px.indices) {
             val c = px[i]
@@ -125,7 +127,7 @@ object ImageTools {
 
             if (bg != null) {
                 // Divide by the paper's own brightness: shadows and uneven light disappear.
-                val f = 255f / max(bg[i], 24)
+                val f = (255f / max(bg[i], 24)).coerceAtMost(2.2f)
                 r *= f; g *= f; b *= f
             }
             val l = 0.299f * r + 0.587f * g + 0.114f * b
@@ -182,6 +184,19 @@ object ImageTools {
             px[i] = (0xFF shl 24) or (lut[c shr 16 and 0xFF] shl 16) or (lut[c shr 8 and 0xFF] shl 8) or lut[c and 0xFF]
         }
         return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
+    }
+
+    /** True when most of the picture is dark (median brightness below ~105). */
+    fun isDark(src: Bitmap): Boolean {
+        val s = 64f / max(src.width, src.height)
+        val w = max(4, (src.width * s).roundToInt())
+        val h = max(4, (src.height * s).roundToInt())
+        val small = Bitmap.createScaledBitmap(src, w, h, true)
+        val px = IntArray(w * h)
+        small.getPixels(px, 0, w, 0, 0, w, h)
+        if (small !== src) small.recycle()
+        val lum = px.map { c -> ((c shr 16 and 0xFF) * 299 + (c shr 8 and 0xFF) * 587 + (c and 0xFF) * 114) / 1000 }.sorted()
+        return lum[lum.size / 2] < 105
     }
 
     /** A blurred "paper only" brightness map: small max-filtered copy scaled back up. */
