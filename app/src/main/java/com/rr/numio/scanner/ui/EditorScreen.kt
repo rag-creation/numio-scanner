@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -435,6 +437,42 @@ private fun CornerEditor(image: Bitmap, corners: List<Offset>, onChange: (List<O
                 val r = if (i == active) 13.dp.toPx() else 10.dp.toPx()
                 drawCircle(Coal, radius = r, center = pt)
                 drawCircle(NumioAmber, radius = r, center = pt, style = Stroke(width = 3.dp.toPx()))
+            }
+
+            // Zoom bubble: shows what's under your finger while you drag a corner.
+            if (active in 0..3) {
+                val pt = pts[active]
+                val lr = 58.dp.toPx()
+                val zoom = 2.5f
+                val margin = 12.dp.toPx()
+                val onLeft = pt.x > size.width / 2f
+                val center = Offset(
+                    if (onLeft) margin + lr else size.width - margin - lr,
+                    margin + lr,
+                )
+                val circle = Path().apply {
+                    addOval(androidx.compose.ui.geometry.Rect(center, lr))
+                }
+                drawCircle(Coal, radius = lr + 3.dp.toPx(), center = center)
+                clipPath(circle) {
+                    drawRect(Coal)
+                    withTransform({
+                        translate(center.x - pt.x * zoom, center.y - pt.y * zoom)
+                        scale(zoom, zoom, pivot = Offset.Zero)
+                    }) {
+                        drawImage(
+                            img,
+                            dstOffset = IntOffset(ox.roundToInt(), oy.roundToInt()),
+                            dstSize = IntSize(dw.roundToInt(), dh.roundToInt()),
+                        )
+                        drawPath(path, NumioAmber, style = Stroke(width = 2.5.dp.toPx() / zoom))
+                    }
+                }
+                drawCircle(NumioAmber, radius = lr, center = center, style = Stroke(width = 2.dp.toPx()))
+                // crosshair
+                val c = 8.dp.toPx()
+                drawLine(NumioAmber, Offset(center.x - c, center.y), Offset(center.x + c, center.y), strokeWidth = 1.5.dp.toPx())
+                drawLine(NumioAmber, Offset(center.x, center.y - c), Offset(center.x, center.y + c), strokeWidth = 1.5.dp.toPx())
             }
         }
     }
