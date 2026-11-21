@@ -28,6 +28,7 @@ internal object LineFinder {
     private const val THETAS = 180
     private const val MAX_LINES = 24
     private const val MIN_SIDE_SUPPORT = 0.35f
+    private const val MAX_SIDE_ANGLE = 0.45f // about 26 degrees
 
     private class Line(val r: Float, val t: Float)
 
@@ -104,6 +105,11 @@ internal object LineFinder {
 
         for (i in across.indices) for (j in i + 1 until across.size)
             for (k in upDown.indices) for (l in k + 1 until upDown.size) {
+                // A page's opposite sides are roughly parallel, even in a tilted photo.
+                // This stops a long table edge being taken as the page's bottom.
+                if (angleBetween(across[i], across[j]) > MAX_SIDE_ANGLE ||
+                    angleBetween(upDown[k], upDown[l]) > MAX_SIDE_ANGLE
+                ) continue
                 val raw = listOf(
                     cross(across[i], upDown[k]), cross(across[i], upDown[l]),
                     cross(across[j], upDown[l]), cross(across[j], upDown[k]),
@@ -141,6 +147,11 @@ internal object LineFinder {
                 }
             }
         return best
+    }
+
+    private fun angleBetween(a: Line, b: Line): Float {
+        val d = abs(a.t - b.t) % PI.toFloat()
+        return min(d, PI.toFloat() - d)
     }
 
     private fun cross(a: Line, b: Line): Offset? {
