@@ -255,11 +255,18 @@ fun EditorScreen(
                 } else {
                     val pv = preview
                     if (pv != null) {
-                        FoldedPaper(
-                            Modifier.aspectRatio(pv.width.toFloat() / pv.height, matchHeightConstraintsFirst = pv.height > pv.width),
-                            fold = 28.dp,
-                        ) {
-                            Image(pv.asImageBitmap(), contentDescription = "Page preview", modifier = Modifier.fillMaxSize())
+                        val shape = Modifier.aspectRatio(pv.width.toFloat() / pv.height, matchHeightConstraintsFirst = pv.height > pv.width)
+                        if (idCard) {
+                            // Cards get card-like rounded corners: the paper fold would hide a corner of the card.
+                            Image(
+                                pv.asImageBitmap(),
+                                contentDescription = "Card preview",
+                                modifier = shape.clip(RoundedCornerShape(14.dp)),
+                            )
+                        } else {
+                            FoldedPaper(shape, fold = 28.dp) {
+                                Image(pv.asImageBitmap(), contentDescription = "Page preview", modifier = Modifier.fillMaxSize())
+                            }
                         }
                     } else {
                         CircularProgressIndicator(color = p.accent)
