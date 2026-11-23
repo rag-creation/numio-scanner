@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon version of the placeholder Scanner icon: the N. is cut out of the page
+     so it still shows when the phone paints the icon in one colour. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+        android:pathData="M36,30 H62.6 L74,41.4 V78 H36 Z M44,44 H49 L58,58 V44 H63 V68 H58 L49,54 V68 H44 Z M66,64 m-3.2,0 a3.2,3.2 0 1,0 6.4,0 a3.2,3.2 0 1,0 -6.4,0" />
+    <path android:fillColor="#FFFFFF" android:pathData="M64.4,31.2 V39.6 H72.8 Z" />
+</vector>
