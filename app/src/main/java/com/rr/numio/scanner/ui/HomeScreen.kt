@@ -221,7 +221,9 @@ fun HomeScreen(
                             Text(mode.label, color = p.ink)
                         }
                     }
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(18.dp))
+                    NumioWordmark(Modifier.height(22.dp))
+                    Spacer(Modifier.height(10.dp))
                     Text(
                         "Scanner by Numio · no internet permission. Your scans never leave this phone.",
                         fontSize = 13.sp,
