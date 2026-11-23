@@ -186,6 +186,30 @@ object ImageTools {
         return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
     }
 
+    /**
+     * Front and back of an ID card on one white A4 page (300 dpi), each at the
+     * card's real size (85.6 × 54 mm), so a printout matches the real card.
+     */
+    fun idCardPage(front: Bitmap, back: Bitmap): Bitmap {
+        val pageW = 2480
+        val pageH = 3508
+        val cardW = 1011 // 85.6 mm at 300 dpi
+        val out = Bitmap.createBitmap(pageW, pageH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        canvas.drawColor(android.graphics.Color.WHITE)
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+        var top = 420
+        for (side in listOf(front, back)) {
+            // Cards are photographed every which way; lay them flat (landscape).
+            val card = if (side.height > side.width) rotate(side, 90) else side
+            val cardH = (cardW.toFloat() * card.height / card.width).roundToInt()
+            val left = (pageW - cardW) / 2
+            canvas.drawBitmap(card, null, android.graphics.Rect(left, top, left + cardW, top + cardH), paint)
+            top += cardH + 200
+        }
+        return out
+    }
+
     /** True when most of the picture is dark (median brightness below ~105). */
     fun isDark(src: Bitmap): Boolean {
         val s = 64f / max(src.width, src.height)

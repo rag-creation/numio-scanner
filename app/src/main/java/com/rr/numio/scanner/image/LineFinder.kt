@@ -26,7 +26,7 @@ internal object LineFinder {
 
     private const val SIZE = 256
     private const val THETAS = 180
-    private const val MAX_LINES = 24
+    private const val MAX_LINES = 40 // busy backgrounds (patterned cloth) need more candidates
     private const val MIN_SIDE_SUPPORT = 0.35f
     private const val MAX_SIDE_ANGLE = 0.45f // about 26 degrees
 
@@ -84,7 +84,7 @@ internal object LineFinder {
 
         // Strongest lines, with neighbours suppressed.
         val lines = ArrayList<Line>()
-        val minVotes = 0.15f * min(w, h)
+        val minVotes = 0.10f * min(w, h) // short edges, e.g. a small ID card
         repeat(MAX_LINES) {
             var bi = 0
             for (k in acc.indices) if (acc[k] > acc[bi]) bi = k
@@ -122,7 +122,7 @@ internal object LineFinder {
                 val cy = pts.sumOf { it.y.toDouble() }.toFloat() / 4f
                 val quad = pts.sortedBy { atan2(it.y - cy, it.x - cx) } // TL, TR, BR, BL
                 val area = area(quad) / (w * h)
-                if (area < 0.08f || area > 0.97f) continue
+                if (area < 0.03f || area > 0.97f) continue // an ID card can be ~5% of the photo
                 var sum = 0f
                 var minSup = 1f
                 for (s in 0..3) {

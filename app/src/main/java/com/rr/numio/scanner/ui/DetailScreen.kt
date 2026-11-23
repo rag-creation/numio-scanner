@@ -3,6 +3,10 @@ package com.rr.numio.scanner.ui
 import android.content.Intent
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.runtime.mutableStateListOf
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -72,6 +76,8 @@ fun DetailScreen(
     start: Scan,
     onBack: () -> Unit,
     onChanged: () -> Unit,
+    /** Add pages to this scan: fromGallery = true for Gallery, false for the camera. */
+    onAddPages: (Scan, Boolean) -> Unit,
 ) {
     val p = LocalPaper.current
     SystemBarIcons(lightIcons = p.dark)
@@ -81,6 +87,33 @@ fun DetailScreen(
     var busy by remember { mutableStateOf(false) }
     var askRename by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
+
+    // Edit pages: changes stay here until Done, so Back cancels them.
+    var editing by remember { mutableStateOf(false) }
+    val order = remember { mutableStateListOf<Int>() }
+    fun startEditing() {
+        order.clear(); order.addAll(0 until scan.pageCount); editing = true
+    }
+    val changed = editing && order.toList() != (0 until scan.pageCount).toList()
+    BackHandler(enabled = editing) { editing = false }
+
+    /** Saves the new page order (if any), then runs [then]. */
+    fun applyPages(then: (Scan) -> Unit) {
+        if (!changed) { then(scan); return }
+        busy = true
+        val keep = order.toList()
+        scope.launch {
+            val updated = withContext(Dispatchers.IO) { runCatching { store.changePages(scan, keep) }.getOrNull() }
+            busy = false
+            if (updated == null) {
+                Toast.makeText(ctx, "Couldn't change the pages. Nothing was lost — try again.", Toast.LENGTH_LONG).show()
+            } else {
+                scan = updated
+                onChanged()
+                then(updated)
+            }
+        }
+    }
 
     val fileName = safeName(scan.name) + ".pdf"
 
@@ -129,10 +162,14 @@ fun DetailScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = p.ink) }
+                IconButton(onClick = { if (editing) editing = false else onBack() }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = if (editing) "Cancel" else "Back", tint = p.ink)
+                }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { askRename = true }) { Icon(Icons.Default.Edit, contentDescription = "Rename", tint = p.ink) }
-                IconButton(onClick = { askDelete = true }) { Icon(Icons.Default.Delete, contentDescription = "Delete scan", tint = p.ink) }
+                if (!editing) {
+                    IconButton(onClick = { askRename = true }) { Icon(Icons.Default.Edit, contentDescription = "Rename", tint = p.ink) }
+                    IconButton(onClick = { askDelete = true }) { Icon(Icons.Default.Delete, contentDescription = "Delete scan", tint = p.ink) }
+                }
             }
             Text(
                 scan.name,
@@ -140,17 +177,68 @@ fun DetailScreen(
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 22.dp),
             )
-            Text(
-                if (scan.pageCount == 1) "1 page" else "${scan.pageCount} pages",
-                fontSize = 13.sp, color = p.sub,
-                modifier = Modifier.padding(start = 22.dp, top = 2.dp),
-            )
+            Row(
+                Modifier.padding(start = 22.dp, end = 12.dp, top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val count = if (editing) order.size else scan.pageCount
+                Text(
+                    if (count == 1) "1 page" else "$count pages",
+                    fontSize = 13.sp, color = p.sub,
+                )
+                Spacer(Modifier.weight(1f))
+                if (editing) {
+                    Text("Saved when you tap Done", fontSize = 12.sp, color = p.sub)
+                } else {
+                    Text(
+                        "Edit pages",
+                        color = p.accentInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(role = Role.Button) { startEditing() }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                    )
+                }
+            }
             LazyColumn(
                 contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 130.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 modifier = Modifier.weight(1f),
             ) {
-                items(scan.pageCount) { i -> PageView(scan, i) }
+                if (editing) {
+                    items(order.size, key = { order[it] }) { pos ->
+                        Column {
+                            PageView(scan, order[pos])
+                            Row(
+                                Modifier.fillMaxWidth().padding(top = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("Page ${pos + 1}", color = p.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.weight(1f))
+                                IconButton(onClick = { if (pos > 0) order.add(pos - 1, order.removeAt(pos)) }, enabled = pos > 0) {
+                                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move page up", tint = if (pos > 0) p.ink else p.line)
+                                }
+                                IconButton(
+                                    onClick = { if (pos < order.lastIndex) order.add(pos + 1, order.removeAt(pos)) },
+                                    enabled = pos < order.lastIndex,
+                                ) {
+                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move page down", tint = if (pos < order.lastIndex) p.ink else p.line)
+                                }
+                                IconButton(onClick = {
+                                    if (order.size == 1) {
+                                        Toast.makeText(ctx, "A scan needs one page. To remove it all, delete the scan.", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        order.removeAt(pos)
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Remove page", tint = p.ink)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(scan.pageCount) { i -> PageView(scan, i) }
+                }
             }
         }
 
@@ -166,24 +254,36 @@ fun DetailScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(
-                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp))
-                    .border(1.dp, Color(0xFF4A463F), RoundedCornerShape(12.dp))
-                    .clickable(enabled = !busy, role = Role.Button) { saveLauncher.launch(fileName) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    LineIcon(Glyph.Pdf, p.barInk, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Save PDF", color = p.barInk, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            if (editing) {
+                BarAction("+ Camera", Modifier.weight(1f)) { applyPages { editing = false; onAddPages(it, false) } }
+                BarAction("+ Gallery", Modifier.weight(1f)) { applyPages { editing = false; onAddPages(it, true) } }
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).background(NumioAmber)
+                        .clickable(enabled = !busy, role = Role.Button) { applyPages { editing = false } },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Done", color = Color(0xFF1A1400), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
-            }
-            Box(
-                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).background(NumioAmber)
-                    .clickable(enabled = !busy, role = Role.Button) { sharePdf() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("Share PDF", color = Color(0xFF1A1400), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            } else {
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, Color(0xFF4A463F), RoundedCornerShape(12.dp))
+                        .clickable(enabled = !busy, role = Role.Button) { saveLauncher.launch(fileName) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LineIcon(Glyph.Pdf, p.barInk, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Save PDF", color = p.barInk, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).background(NumioAmber)
+                        .clickable(enabled = !busy, role = Role.Button) { sharePdf() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Share PDF", color = Color(0xFF1A1400), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
 
@@ -236,7 +336,7 @@ fun DetailScreen(
 @Composable
 private fun PageView(scan: Scan, index: Int) {
     val p = LocalPaper.current
-    val bmp by produceState<Bitmap?>(null, scan.id, index) {
+    val bmp by produceState<Bitmap?>(null, scan.id, scan.rev, index) {
         value = withContext(Dispatchers.IO) { runCatching { ImageTools.decodeFile(scan.page(index), 1400) }.getOrNull() }
     }
     val b = bmp
@@ -248,6 +348,18 @@ private fun PageView(scan: Scan, index: Int) {
         FoldedPaper(Modifier.fillMaxWidth().aspectRatio(b.width.toFloat() / b.height), fold = 28.dp) {
             Image(b.asImageBitmap(), contentDescription = "Page ${index + 1}", modifier = Modifier.fillMaxSize())
         }
+    }
+}
+
+@Composable
+private fun BarAction(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.height(48.dp).clip(RoundedCornerShape(12.dp))
+            .border(1.dp, Color(0xFF4A463F), RoundedCornerShape(12.dp))
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = LocalPaper.current.barInk, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
 

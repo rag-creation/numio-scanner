@@ -110,10 +110,13 @@ fun Modifier.paperBackground(p: Paper) = drawBehind {
     drawPath(path, p.bgFold)
 }
 
+/** The official "Numio." wordmark: cream letters on dark screens, dark letters on light ones. */
 @Composable
 fun NumioWordmark(modifier: Modifier = Modifier) {
     Image(
-        painter = painterResource(R.drawable.numio_wordmark),
+        painter = painterResource(
+            if (LocalPaper.current.dark) R.drawable.numio_wordmark_on_dark else R.drawable.numio_wordmark_on_light,
+        ),
         contentDescription = "Numio",
         modifier = modifier,
     )

@@ -25,6 +25,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -79,13 +80,14 @@ import java.io.File
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 
-enum class CamMode(val label: String) { Document("Document"), Qr("QR") }
+enum class CamMode(val label: String) { Document("Document"), IdCard("ID card"), Qr("QR") }
 
 @Composable
 fun CameraScreen(
     startMode: CamMode,
     pageCount: Int,
-    onCaptured: (File) -> Unit,
+    modes: List<CamMode> = CamMode.entries,
+    onCaptured: (File, CamMode) -> Unit,
     onDone: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -134,7 +136,7 @@ fun CameraScreen(
         val p = provider ?: cameraProvider(ctx).also { provider = it }
         p.unbindAll()
         val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-        val useCase = if (mode == CamMode.Document) {
+        val useCase = if (mode != CamMode.Qr) {
             imageCapture
         } else {
             analyzer.paused = false
@@ -177,7 +179,7 @@ fun CameraScreen(
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     busy = false
-                    onCaptured(file)
+                    onCaptured(file, mode)
                 }
 
                 override fun onError(exception: ImageCaptureException) {
@@ -212,6 +214,35 @@ fun CameraScreen(
                             .padding(horizontal = 20.dp, vertical = 12.dp),
                     ) { Text("Allow camera", color = Color(0xFF1A1400), fontWeight = FontWeight.SemiBold) }
                 }
+            }
+        }
+
+        if (mode == CamMode.IdCard && granted) {
+            // Card-shaped guide (ID-1 cards are 85.6 × 54 mm).
+            Column(
+                Modifier.align(Alignment.Center).offset(y = (-60).dp).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(NumioAmber)
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                ) {
+                    Text(
+                        if (pageCount == 0) "Front of the card" else "Now the back",
+                        color = Color(0xFF1A1400), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                // Nearly full width, so the card fills the photo: sharper small text.
+                Box(
+                    Modifier
+                        .padding(horizontal = 14.dp)
+                        .fillMaxWidth()
+                        .aspectRatio(85.6f / 54f)
+                        .border(3.dp, NumioAmber, RoundedCornerShape(16.dp)),
+                )
             }
         }
 
@@ -264,7 +295,7 @@ fun CameraScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                CamMode.entries.forEach { m ->
+                modes.forEach { m ->
                     val on = m == mode
                     Box(
                         Modifier
@@ -309,7 +340,7 @@ fun CameraScreen(
                 }
 
                 // Shutter
-                if (mode == CamMode.Document) {
+                if (mode != CamMode.Qr) {
                     Box(
                         Modifier
                             .size(82.dp)

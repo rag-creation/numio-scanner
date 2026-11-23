@@ -68,6 +68,23 @@ private fun ScannerApp(store: ScanStore, prefs: Prefs) {
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
     val draft = remember { mutableStateListOf<PageDraft>() }
     var refresh by remember { mutableIntStateOf(0) }
+    /** Set while adding pages to a saved scan. */
+    var appendTo by remember { mutableStateOf<Scan?>(null) }
+    /** True while scanning the front and back of an ID card. */
+    var idCard by remember { mutableStateOf(false) }
+
+    /** Starting something new from the home screen. */
+    fun freshStart() {
+        appendTo = null
+        idCard = false
+    }
+
+    /** Where to go when leaving the camera or editor without saving. */
+    fun leave() {
+        val back = appendTo
+        freshStart()
+        screen = if (back != null) Screen.Detail(back) else Screen.Home
+    }
 
     fun clearDraft() {
         draft.forEach { it.file.delete() }
@@ -103,28 +120,41 @@ private fun ScannerApp(store: ScanStore, prefs: Prefs) {
                 refreshKey = refresh,
                 themeMode = themeMode,
                 onThemeChange = { themeMode = it; prefs.theme = it },
-                onScan = { screen = Screen.Camera(CamMode.Document) },
-                onQr = { screen = Screen.Camera(CamMode.Qr) },
+                onScan = { freshStart(); screen = Screen.Camera(CamMode.Document) },
+                onQr = { freshStart(); screen = Screen.Camera(CamMode.Qr) },
                 onImport = {
+                    freshStart()
                     picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 },
                 onOpen = { screen = Screen.Detail(it) },
             )
 
             is Screen.Camera -> {
-                BackHandler { screen = if (draft.isEmpty()) Screen.Home else Screen.Editor }
+                BackHandler { if (draft.isEmpty()) leave() else screen = Screen.Editor }
                 CameraScreen(
                     startMode = s.mode,
                     pageCount = draft.size,
-                    onCaptured = { draft.add(PageDraft(it)) },
+                    // ID cards and QR only when starting fresh; adding pages is documents only.
+                    modes = if (appendTo == null && draft.isEmpty()) CamMode.entries else listOf(CamMode.Document),
+                    onCaptured = { file, mode ->
+                        val page = PageDraft(file)
+                        if (mode == CamMode.IdCard) {
+                            idCard = true
+                            // Cards are colourful: start untouched.
+                            page.look = com.rr.numio.scanner.image.Look.Original
+                            page.autoLook = false
+                        }
+                        draft.add(page)
+                        if (mode == CamMode.IdCard && draft.size == 2) screen = Screen.Editor
+                    },
                     onDone = { if (draft.isNotEmpty()) screen = Screen.Editor },
-                    onClose = { screen = if (draft.isEmpty()) Screen.Home else Screen.Editor },
+                    onClose = { if (draft.isEmpty()) leave() else screen = Screen.Editor },
                 )
             }
 
             Screen.Editor -> {
                 if (draft.isEmpty()) {
-                    screen = Screen.Home
+                    leave()
                 } else {
                     EditorScreen(
                         store = store,
@@ -132,13 +162,16 @@ private fun ScannerApp(store: ScanStore, prefs: Prefs) {
                         onAddPage = { screen = Screen.Camera(CamMode.Document) },
                         onSaved = { saved ->
                             clearDraft()
+                            freshStart()
                             refresh++
                             screen = Screen.Detail(saved)
                         },
                         onDiscard = {
                             clearDraft()
-                            screen = Screen.Home
+                            leave()
                         },
+                        idCard = idCard,
+                        appendTo = appendTo,
                     )
                 }
             }
@@ -150,6 +183,15 @@ private fun ScannerApp(store: ScanStore, prefs: Prefs) {
                     start = s.scan,
                     onBack = { screen = Screen.Home },
                     onChanged = { refresh++ },
+                    onAddPages = { scan, fromGallery ->
+                        freshStart()
+                        appendTo = scan
+                        if (fromGallery) {
+                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        } else {
+                            screen = Screen.Camera(CamMode.Document)
+                        }
+                    },
                 )
             }
         }

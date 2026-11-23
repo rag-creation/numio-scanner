@@ -105,6 +105,10 @@ fun EditorScreen(
     onAddPage: () -> Unit,
     onSaved: (Scan) -> Unit,
     onDiscard: () -> Unit,
+    /** Two pages = front and back of an ID card, saved together on one page. */
+    idCard: Boolean = false,
+    /** When set, the new pages are added to the end of this saved scan. */
+    appendTo: Scan? = null,
 ) {
     val p = LocalPaper.current
     SystemBarIcons(lightIcons = p.dark)
@@ -120,6 +124,39 @@ fun EditorScreen(
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     BackHandler(enabled = !saving) { askDiscard = true }
+
+    /** Processes every page from the full-size photo and saves. name = null when adding to [appendTo]. */
+    fun saveAll(name: String?) {
+        saving = true
+        val pages = draft.map { Snapshot(it.file, it.corners, it.rotation, it.look, it.adjust) }
+        val asIdCard = idCard && pages.size == 2 && appendTo == null
+        fun render(i: Int): Bitmap {
+            val s = pages[i]
+            // Full-size photo, so the cut-out page keeps all its detail.
+            val src = ImageTools.decodeFile(s.file, 4096)
+            val out = ImageTools.process(src, s.corners ?: EdgeFinder.find(src), s.rotation, s.look, s.adjust)
+            if (out !== src) src.recycle()
+            return out
+        }
+        scope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    when {
+                        appendTo != null ->
+                            store.changePages(appendTo, (0 until appendTo.pageCount).toList(), pages.size) { render(it) }
+                        asIdCard -> store.save(name ?: defaultName(), 1) {
+                            val front = render(0)
+                            val back = render(1)
+                            ImageTools.idCardPage(front, back).also { front.recycle(); back.recycle() }
+                        }
+                        else -> store.save(name ?: defaultName(), pages.size) { render(it) }
+                    }
+                }
+            }
+            saving = false
+            result.onSuccess(onSaved).onFailure { error = "Couldn't save the scan. Your pages are still here — try again." }
+        }
+    }
 
     val base by produceState<Bitmap?>(null, page) {
         value = null
@@ -164,7 +201,13 @@ fun EditorScreen(
                 IconButton(onClick = { if (index > 0) index-- }, enabled = index > 0) {
                     Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous page", tint = if (index > 0) p.ink else p.line)
                 }
-                Text("Page ${index + 1} of ${draft.size}", color = p.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    when {
+                        idCard && draft.size == 2 -> if (index == 0) "Front of the card" else "Back of the card"
+                        else -> "Page ${index + 1} of ${draft.size}"
+                    },
+                    color = p.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                )
                 IconButton(onClick = { if (index < draft.lastIndex) index++ }, enabled = index < draft.lastIndex) {
                     Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next page", tint = if (index < draft.lastIndex) p.ink else p.line)
                 }
@@ -212,11 +255,18 @@ fun EditorScreen(
                 } else {
                     val pv = preview
                     if (pv != null) {
-                        FoldedPaper(
-                            Modifier.aspectRatio(pv.width.toFloat() / pv.height, matchHeightConstraintsFirst = pv.height > pv.width),
-                            fold = 28.dp,
-                        ) {
-                            Image(pv.asImageBitmap(), contentDescription = "Page preview", modifier = Modifier.fillMaxSize())
+                        val shape = Modifier.aspectRatio(pv.width.toFloat() / pv.height, matchHeightConstraintsFirst = pv.height > pv.width)
+                        if (idCard) {
+                            // Cards get card-like rounded corners: the paper fold would hide a corner of the card.
+                            Image(
+                                pv.asImageBitmap(),
+                                contentDescription = "Card preview",
+                                modifier = shape.clip(RoundedCornerShape(14.dp)),
+                            )
+                        } else {
+                            FoldedPaper(shape, fold = 28.dp) {
+                                Image(pv.asImageBitmap(), contentDescription = "Page preview", modifier = Modifier.fillMaxSize())
+                            }
                         }
                     } else {
                         CircularProgressIndicator(color = p.accent)
@@ -293,16 +343,33 @@ fun EditorScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Box(
-                Modifier.height(46.dp).clip(RoundedCornerShape(12.dp))
-                    .border(1.dp, Color(0xFF4A463F), RoundedCornerShape(12.dp))
-                    .clickable(role = Role.Button, onClick = onAddPage)
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.Center,
-            ) { Text("+ Add page", color = p.barInk, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+            if (idCard && draft.size == 2) {
+                // Photos are labelled in the order taken; swap if the back was shot first.
+                Box(
+                    Modifier.height(46.dp).clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, Color(0xFF4A463F), RoundedCornerShape(12.dp))
+                        .clickable(enabled = !saving, role = Role.Button, onClickLabel = "Swap front and back") {
+                            val first = draft[0]
+                            draft[0] = draft[1]
+                            draft[1] = first
+                        }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("⇅  Swap sides", color = p.barInk, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+            } else {
+                Box(
+                    Modifier.height(46.dp).clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, Color(0xFF4A463F), RoundedCornerShape(12.dp))
+                        .clickable(role = Role.Button, onClick = onAddPage)
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("+ Add page", color = p.barInk, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+            }
             Box(
                 Modifier.height(46.dp).clip(RoundedCornerShape(12.dp)).background(NumioAmber)
-                    .clickable(enabled = !saving, role = Role.Button) { askName = true }
+                    .clickable(enabled = !saving, role = Role.Button) {
+                        if (appendTo != null) saveAll(null) else askName = true
+                    }
                     .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.Center,
             ) { Text("Save", color = Color(0xFF1A1400), fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
@@ -330,7 +397,8 @@ fun EditorScreen(
     }
 
     if (askName) {
-        var name by remember { mutableStateOf(defaultName()) }
+        val suggested = remember { if (idCard && draft.size == 2) "ID card " + dateStamp() else defaultName() }
+        var name by remember { mutableStateOf(suggested) }
         AlertDialog(
             onDismissRequest = { askName = false },
             title = { Text("Name this scan", fontFamily = Display) },
@@ -338,25 +406,7 @@ fun EditorScreen(
             confirmButton = {
                 TextButton(onClick = {
                     askName = false
-                    saving = true
-                    val pages = draft.map { Snapshot(it.file, it.corners, it.rotation, it.look, it.adjust) }
-                    val finalName = name.trim().ifEmpty { defaultName() }
-                    scope.launch {
-                        val result = withContext(Dispatchers.Default) {
-                            runCatching {
-                                store.save(finalName, pages.size) { i ->
-                                    val s = pages[i]
-                                    // Full-size photo, so the cut-out page keeps all its detail.
-                                    val src = ImageTools.decodeFile(s.file, 4096)
-                                    val out = ImageTools.process(src, s.corners ?: EdgeFinder.find(src), s.rotation, s.look, s.adjust)
-                                    if (out !== src) src.recycle()
-                                    out
-                                }
-                            }
-                        }
-                        saving = false
-                        result.onSuccess(onSaved).onFailure { error = "Couldn't save the scan. Your pages are still here — try again." }
-                    }
+                    saveAll(name.trim().ifEmpty { suggested })
                 }) { Text("Save", color = p.accentInk) }
             },
             dismissButton = { TextButton(onClick = { askName = false }) { Text("Cancel", color = p.sub) } },
@@ -374,8 +424,9 @@ fun EditorScreen(
 
 private data class Snapshot(val file: File, val corners: List<Offset>?, val rotation: Int, val look: Look, val adjust: Adjust)
 
-private fun defaultName(): String =
-    "Scan " + SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date())
+private fun dateStamp(): String = SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date())
+
+private fun defaultName(): String = "Scan " + dateStamp()
 
 @Composable
 private fun ToolButton(glyph: Glyph, label: String, onClick: () -> Unit) {
